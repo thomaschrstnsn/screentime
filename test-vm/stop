@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Shuts the test VM down cleanly, killing QEMU if that takes too long.
+# Usage: test-vm/stop
+source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+
+pid=$(vm_pid) || { info "the VM is not running"; rm -f "$PID_FILE"; exit 0; }
+
+info "powering off"
+vm_ssh systemctl poweroff 2>/dev/null || true
+for _ in $(seq 30); do
+  kill -0 "$pid" 2>/dev/null || break
+  sleep 1
+done
+if kill -0 "$pid" 2>/dev/null; then
+  info "no clean shutdown after 30s, killing QEMU"
+  kill "$pid"
+fi
+rm -f "$PID_FILE"
+info "stopped"

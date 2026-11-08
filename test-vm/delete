@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Stops the test VM and deletes its disk, SSH key and logs. The next start
+# boots a fresh VM, so timekpr forgets all limits and time spent.
+# Usage: test-vm/delete
+source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+
+"$VM_DIR/stop"
+rm -rf "$STATE_DIR"
+info "deleted $STATE_DIR"

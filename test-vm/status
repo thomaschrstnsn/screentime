@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Shows whether the test VM is running and the state of its services.
+# Usage: test-vm/status
+source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+
+if ! pid=$(vm_pid); then
+  echo "stopped$([[ -f $DISK ]] && echo ", disk kept at $DISK")"
+  exit 0
+fi
+echo "running (pid $pid), SSH on 127.0.0.1:$SSH_PORT, NATS on nats://127.0.0.1:$NATS_PORT"
+vm_ssh 'for u in nats timekpr monitored-session screentime-collector; do
+  printf "  %-22s %s\n" "$u" "$(systemctl is-active $u)"
+done
+printf "  %-22s %s\n" "guest clock" "$(date -u "+%F %T UTC")"' ||
+  echo "  (SSH not answering yet)"

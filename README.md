@@ -52,3 +52,15 @@ Example payload:
 - Rust (latest stable)
 - Timekpr-nExT installed and running
 - A NATS server
+
+## Integration testing
+
+[`test-vm/`](test-vm/README.md) has a NixOS VM running Timekpr-nExT, NATS and the collector built from the working tree, plus scripts to start, stop and delete it, move its clock, and change a monitored user's time left today:
+
+```bash
+test-vm/start
+test-vm/timekpr add 10m
+test-vm/nats sub 'time.obs.>'
+```
+
+The collector itself also builds with `nix build`.

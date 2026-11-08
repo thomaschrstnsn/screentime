@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Builds the test VM from the working tree and boots it in the background.
+# Usage: test-vm/start [--foreground]
+source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+
+foreground=false
+case ${1:-} in
+  --foreground | -f) foreground=true ;;
+  "") ;;
+  *) die "usage: test-vm/start [--foreground]" ;;
+esac
+
+is_running && die "the VM is already running (pid $(vm_pid))"
+
+mkdir -p "$STATE_DIR"
+[[ -f $KEY ]] || ssh-keygen -q -t ed25519 -N '' -C test-vm -f "$KEY"
+
+info "building the VM (collector from the working tree)"
+vm=$(nix build "$REPO_DIR#test-vm" --no-link --print-out-paths)
+
+# The run script reads NIX_DISK_IMAGE (created on first boot) and QEMU_OPTS.
+export NIX_DISK_IMAGE=$DISK
+export QEMU_OPTS="-smbios type=11,value=io.systemd.credential.binary:test-vm.authorized-keys=$(base64 -w0 "$KEY.pub")"
+
+if $foreground; then
+  info "booting in the foreground (quit QEMU with Ctrl-a x)"
+  exec "$vm/bin/run-test-vm-vm"
+fi
+
+info "booting (console log: $CONSOLE_LOG)"
+setsid "$vm/bin/run-test-vm-vm" >"$CONSOLE_LOG" 2>&1 </dev/null &
+echo $! >"$PID_FILE"
+
+started=$SECONDS
+until vm_ssh true 2>/dev/null; do
+  is_running || die "the VM exited during boot, see $CONSOLE_LOG"
+  ((SECONDS - started < 120)) || die "no SSH after 120s, see $CONSOLE_LOG"
+  sleep 1
+done
+info "up after $((SECONDS - started))s: SSH on 127.0.0.1:$SSH_PORT, NATS on nats://127.0.0.1:$NATS_PORT"

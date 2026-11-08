@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Opens a root shell in the test VM, or runs a command there.
+# Usage: test-vm/ssh [command...]
+source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+
+require_running
+if (($# == 0)); then
+  vm_ssh -t
+else
+  vm_ssh "$@"
+fi

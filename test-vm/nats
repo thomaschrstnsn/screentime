@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Runs the NATS CLI on the host against the test VM's NATS server, through
+# the forwarded port. Uses natscli from the flake's pinned nixpkgs.
+# Usage: test-vm/nats <natscli args...>, e.g. test-vm/nats sub 'time.>'
+source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+
+exec nix run --inputs-from "$REPO_DIR" nixpkgs#natscli -- --server "nats://127.0.0.1:$NATS_PORT" "$@"

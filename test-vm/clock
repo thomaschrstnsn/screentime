@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Shows or moves the test VM's clock. Timekpr notices a jump within ~3s and
+# handles it like the machine waking from sleep, rolling over the day,
+# week or month as needed. The guest runs in UTC.
+#
+# Usage:
+#   test-vm/clock                     show guest and host time
+#   test-vm/clock set <date>          any GNU date string: "2026-11-09 08:00",
+#                                     "tomorrow 10:00", "next monday 09:00"
+#   test-vm/clock advance <duration>  move forward: 90s, 10m, 2h, 1h30m
+#   test-vm/clock midnight [seconds]  jump to just before midnight (default 30s)
+#   test-vm/clock reset               back to the host's time
+source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+
+require_running
+
+set_guest() { vm_ssh "date -u -s $(printf %q "$1") >/dev/null"; }
+
+case ${1:-show} in
+  show) ;;
+  set)
+    (($# >= 2)) || die "usage: test-vm/clock set <date>"
+    shift
+    set_guest "$*"
+    ;;
+  advance)
+    (($# == 2)) || die "usage: test-vm/clock advance <duration>"
+    secs=$(parse_duration "$2")
+    vm_ssh "date -u -s @\$((\$(date +%s) + $secs)) >/dev/null"
+    ;;
+  midnight)
+    before=$(parse_duration "${2:-30}")
+    vm_ssh "date -u -s @\$((\$(date -u -d 'tomorrow 00:00' +%s) - $before)) >/dev/null"
+    ;;
+  reset) set_guest "@$(date +%s)" ;;
+  *) die "unknown command '$1' (see the header of test-vm/clock)" ;;
+esac
+
+echo "guest: $(vm_ssh date -u '"+%a %F %T UTC"')"
+echo "host:  $(date -u '+%a %F %T UTC')"

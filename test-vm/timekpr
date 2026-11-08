@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+# Reads and changes the monitored user's screen time through Timekpr's DBus
+# admin API, called as the collector's user (stcol) so permissions match.
+# The user is junior unless TEST_VM_USER says otherwise.
+#
+# Usage:
+#   test-vm/timekpr                    show time left today and friends
+#   test-vm/timekpr add <duration>     time adjustment: add to time left today
+#   test-vm/timekpr remove <duration>  time adjustment: remove (stops at 0)
+#   test-vm/timekpr set <duration>     set time left today outright
+#   test-vm/timekpr limit <duration>   daily limit for every allowed weekday
+#
+# Durations: 600, 10m, 2h, 1h30m.
+source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+
+require_running
+
+# Calls a com.timekpr.server.user.admin method; prints busctl's JSON reply.
+admin_call() {
+  vm_ssh runuser -u stcol -- busctl --json=short call -- \
+    com.timekpr.server /com/timekpr/server com.timekpr.server.user.admin "$@"
+}
+
+# Fails on a non-zero timekpr result code, e.g. (1, "configuration is not found").
+check_result() {
+  local reply=$1 code
+  code=$(jq -r '.data[0]' <<<"$reply")
+  [[ $code == 0 ]] || die "timekpr returned $code: $(jq -r '.data[1]' <<<"$reply")"
+}
+
+user_information() {
+  local reply
+  reply=$(admin_call getUserInformation ss "$VM_USER" F)
+  check_result "$reply"
+  jq '.data[2] | map_values(.data)' <<<"$reply"
+}
+
+show() {
+  user_information | jq -r --arg user "$VM_USER" '
+    def hms: (if . < 0 then "-" else "" end) as $sign | (if . < 0 then -. else . end)
+      | "\($sign)\(./3600|floor):\(.%3600/60|floor|tostring|("0"*(2-length))+.):\(.%60|tostring|("0"*(2-length))+.)";
+    "user              \($user)",
+    "time left today   \(.TIME_LEFT_DAY|hms)  (\(.TIME_LEFT_DAY)s)",
+    "spent today       \(.TIME_SPENT_DAY|hms)",
+    "balance           \(.TIME_SPENT_BALANCE|hms)  (\(.TIME_SPENT_BALANCE)s; negative means added time)",
+    "spent week/month  \(.TIME_SPENT_WEEK|hms) / \(.TIME_SPENT_MONTH|hms)",
+    "daily limits      \(.LIMITS_PER_WEEKDAYS|map(hms)|join(" "))  (for weekdays \(.ALLOWED_WEEKDAYS|map(tostring)|join(",")))"'
+}
+
+set_time_left() {
+  local secs reply
+  secs=$(parse_duration "$2")
+  reply=$(admin_call setTimeLeft ssi "$VM_USER" "$1" "$secs")
+  check_result "$reply"
+}
+
+case ${1:-show} in
+  show) ;;
+  add | remove | set)
+    (($# == 2)) || die "usage: test-vm/timekpr $1 <duration>"
+    case $1 in add) op=+ ;; remove) op=- ;; set) op== ;; esac
+    set_time_left "$op" "$2"
+    ;;
+  limit)
+    (($# == 2)) || die "usage: test-vm/timekpr limit <duration>"
+    secs=$(parse_duration "$2")
+    # Timekpr matches the limits list position by position against the
+    # allowed weekdays, so pass one limit per allowed day.
+    days=$(user_information | jq '.ALLOWED_WEEKDAYS | length')
+    reply=$(admin_call setTimeLimitForDays sai "$VM_USER" "$days" $(printf "$secs %.0s" $(seq "$days")))
+    check_result "$reply"
+    ;;
+  *) die "unknown command '$1' (see the header of test-vm/timekpr)" ;;
+esac
+
+show
