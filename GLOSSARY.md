@@ -19,3 +19,7 @@ _Avoid_: Remaining time, allowance, daily limit
 **Time adjustment**:
 A one-off increase or decrease of a monitored user's time left today, leaving their configured limits unchanged.
 _Avoid_: Extension, bonus, override, limit change
+
+**Adjuster**:
+A person admitted by the screentime Cloudflare Access policy, who may make time adjustments.
+_Avoid_: Admin, parent, operator
