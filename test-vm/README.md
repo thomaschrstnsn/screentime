@@ -17,7 +17,7 @@ test-vm/stop
 |---|---|
 | Monitored user | `junior`, with a fake wayland session so timekpr counts their time from boot |
 | Collector | `screentime-collector -u junior,ghost --hostname test-vm`, running as `stcol` (in group `timekpr`), publishing to `time.obs.test-vm.junior` every 5 s and serving time adjustments on `time.adjust.test-vm.*`. `ghost` is unknown to Timekpr, so it is skipped with a warning. |
-| NATS | JetStream enabled, no auth, guest port 4222 forwarded to **`nats://127.0.0.1:14222`** |
+| NATS | JetStream enabled, no auth, guest port 4222 forwarded to **`nats://127.0.0.1:14222`**. The collector creates the `OBSERVATIONS` and `ADJUSTMENTS` streams at startup. |
 | SSH | root, guest port 22 forwarded to **`127.0.0.1:12222`**, key login only |
 | Clock | UTC, with NTP off so clock changes stick |
 

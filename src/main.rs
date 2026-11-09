@@ -10,6 +10,7 @@ use crate::timekpr::{Timekpr, TimekprError, ZbusTimekpr};
 mod adjust;
 mod dbus;
 mod observation;
+mod streams;
 mod timekpr;
 
 #[derive(Parser, Debug)]
@@ -44,6 +45,13 @@ async fn main() -> Result<()> {
         .await
         .context("creating the Timekpr admin proxy")?;
 
+    tokio::spawn(streams::ensure_all(
+        async_nats::jetstream::new(nats.clone()),
+        vec![
+            observation::observations_stream(),
+            adjust::contract::adjustments_stream(),
+        ],
+    ));
     let observing = tokio::spawn(observe_loop(
         nats.clone(),
         timekpr.clone(),

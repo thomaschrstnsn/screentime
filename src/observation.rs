@@ -10,6 +10,21 @@ pub struct Observation {
     pub spent_day: i32,
 }
 
+/// The JetStream stream holding the latest observation of every monitored user, which
+/// screentime-web reads.
+pub fn observations_stream() -> async_nats::jetstream::stream::Config {
+    use async_nats::jetstream::stream::{Config, DiscardPolicy, StorageType};
+    Config {
+        name: "OBSERVATIONS".into(),
+        subjects: vec!["time.obs.*.*".into()],
+        max_messages_per_subject: 1,
+        discard: DiscardPolicy::Old,
+        allow_direct: true,
+        storage: StorageType::File,
+        ..Default::default()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
