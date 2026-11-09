@@ -1,6 +1,7 @@
 # NixOS test VM: Timekpr-nExT tracking a monitored user, NATS with JetStream,
-# and the collector built from this working tree. See ./README.md.
-{ pkgs, screentime-collector, ... }:
+# and the collector from this flake's NixOS module, built from this working
+# tree. See ./README.md.
+{ pkgs, ... }:
 let
   monitoredUser = "junior";
 in
@@ -58,17 +59,7 @@ in
     isNormalUser = true;
     initialPassword = monitoredUser;
   };
-  users.users.stcol = {
-    isSystemUser = true;
-    group = "stcol";
-  };
-  users.groups.stcol = { };
-
-  # adminUsers puts stcol in the timekpr group, which the DBus policy requires.
-  services.timekpr = {
-    enable = true;
-    adminUsers = [ "stcol" ];
-  };
+  services.timekpr.enable = true;
   services.nats = {
     enable = true;
     jetstream = true;
@@ -98,22 +89,14 @@ in
 
   environment.systemPackages = [ pkgs.natscli ];
 
-  systemd.services.screentime-collector = {
-    wantedBy = [ "multi-user.target" ];
-    # Not after timekpr.service: that unit is After=multi-user.target, which
-    # would make an ordering cycle. Restart covers timekpr not being ready.
-    after = [
-      "nats.service"
-      "monitored-session.service"
-    ];
-    environment.RUST_LOG = "info";
-    serviceConfig = {
-      # ghost has no account and Timekpr has never seen it: it must not stop junior being reported.
-      ExecStart = "${screentime-collector}/bin/screentime-collector -n nats://localhost:4222 -u ${monitoredUser},ghost --hostname test-vm";
-      User = "stcol";
-      Group = "stcol";
-      Restart = "on-failure";
-      RestartSec = "5s";
-    };
+  services.screentime-collector = {
+    enable = true;
+    natsUrl = "nats://localhost:4222";
+    monitoredUsers = [ monitoredUser ];
   };
+  # On top of the module's ordering, so the first run finds NATS and a session.
+  systemd.services.screentime-collector.after = [
+    "nats.service"
+    "monitored-session.service"
+  ];
 }

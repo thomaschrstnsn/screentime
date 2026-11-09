@@ -20,6 +20,7 @@
           ];
         };
         cargoLock.lockFile = ./Cargo.lock;
+        meta.mainProgram = "screentime-collector";
       };
     in
     {
@@ -29,12 +30,14 @@
         test-vm = self.nixosConfigurations.test-vm.config.system.build.vm;
       };
 
+      nixosModules.default = import ./module.nix self.packages;
+
       # Manual integration test VM, driven by the scripts in ./test-vm.
       nixosConfigurations.test-vm = nixpkgs.lib.nixosSystem {
         inherit system;
-        specialArgs = { inherit screentime-collector; };
         modules = [
           "${nixpkgs}/nixos/modules/virtualisation/qemu-vm.nix"
+          self.nixosModules.default
           ./test-vm/configuration.nix
         ];
       };

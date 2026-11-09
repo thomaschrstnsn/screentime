@@ -31,6 +31,23 @@ cargo run -- --users <USERNAME> --hostname <HOSTNAME> [--nats-url <NATS_URL>]
 cargo run -- --users kid1,kid2 --hostname my-pc --nats-url nats://nats.example.com:4222
 ```
 
+### NixOS
+
+The flake exports `nixosModules.default`, which runs the collector as a hardened systemd service under its own `stcol` user and makes that user a Timekpr-nExT admin:
+
+```nix
+{
+  imports = [ screentime-collector.nixosModules.default ];
+  services.timekpr.enable = true; # required
+  services.screentime-collector = {
+    enable = true;
+    natsUrl = "nats://nats.example.com:4222";
+    monitoredUsers = [ "kid1" "kid2" ];
+    # hostname defaults to networking.hostName
+  };
+}
+```
+
 ## Data Format
 
 The application publishes JSON data to the subject `time.obs.<hostname>.<user>`.
