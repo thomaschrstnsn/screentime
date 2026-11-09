@@ -1,8 +1,16 @@
-use anyhow::Result;
-use clap::Parser;
-use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, time::Duration};
-use zbus::{Connection, zvariant::OwnedValue};
+
+use anyhow::{Context, Result, bail};
+use clap::Parser;
+use futures_util::StreamExt;
+
+use crate::adjust::contract::Reply;
+use crate::timekpr::{Timekpr, TimekprError, ZbusTimekpr};
+
+mod adjust;
+mod dbus;
+mod observation;
+mod timekpr;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -20,111 +28,166 @@ struct Args {
     hostname: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-struct TimeObservation {
-    left_day: i32,
-    spent_balance: i32,
-    spent_month: i32,
-    spent_week: i32,
-    spent_day: i32,
-}
-
-impl TryFrom<&HashMap<String, OwnedValue>> for TimeObservation {
-    type Error = anyhow::Error;
-
-    fn try_from(value: &HashMap<String, OwnedValue>) -> anyhow::Result<Self, Self::Error> {
-        let get_i32 = |key: &str| -> anyhow::Result<i32> {
-            let value = value
-                .get(key)
-                .ok_or_else(|| anyhow::anyhow!("missing key: {}", key))?;
-
-            let i = value.downcast_ref()?;
-            Ok(i)
-        };
-
-        Ok(TimeObservation {
-            left_day: get_i32("TIME_LEFT_DAY")?,
-            spent_balance: get_i32("TIME_SPENT_BALANCE")?,
-            spent_month: get_i32("TIME_SPENT_MONTH")?,
-            spent_week: get_i32("TIME_SPENT_WEEK")?,
-            spent_day: get_i32("TIME_SPENT_DAY")?,
-        })
-    }
-}
-
-mod dbus;
-
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
     let args = Args::parse();
 
-    let nats_client = async_nats::connect(&args.nats_url).await?;
+    // Startup failures are fatal; systemd's Restart=on-failure tries again.
+    let nats = async_nats::connect(&args.nats_url)
+        .await
+        .context("connecting to NATS")?;
+    let connection = zbus::Connection::system()
+        .await
+        .context("connecting to the D-Bus system bus")?;
+    let timekpr = ZbusTimekpr::new(&connection)
+        .await
+        .context("creating the Timekpr admin proxy")?;
 
-    let connection = Connection::system().await?;
+    let observing = tokio::spawn(observe_loop(
+        nats.clone(),
+        timekpr.clone(),
+        args.hostname.clone(),
+        args.users.clone(),
+    ));
 
-    let proxy = dbus::timekpr::user::admin::AdminProxy::new(
-        &connection,
-        "com.timekpr.server",
-        "/com/timekpr/server",
-    )
-    .await?;
+    tokio::select! {
+        result = serve_adjustments(nats, timekpr, args.hostname, args.users) => result,
+        joined = observing => {
+            joined.context("observation loop panicked")?;
+            bail!("observation loop ended")
+        }
+    }
+}
 
+/// Publishes an observation of every user every 5 s. A user Timekpr can't report on is
+/// skipped for that tick; the others are still published.
+async fn observe_loop(
+    nats: async_nats::Client,
+    timekpr: ZbusTimekpr,
+    host: String,
+    users: Vec<String>,
+) {
+    let mut failing: HashMap<String, TimekprError> = HashMap::new();
     let mut interval = tokio::time::interval(Duration::from_secs(5));
 
     loop {
         interval.tick().await;
 
-        for user in &args.users {
-            let (_i32, _string, properties) = proxy.get_user_information(user, "F").await?;
-
-            let observation =
-                TimeObservation::try_from(&properties).expect("failed to parse observation");
-
-            let json_payload =
-                serde_json::to_vec(&observation).expect("failed to serialize observation");
-
-            let topic = format!("time.obs.{}.{}", args.hostname, user);
-            let result = nats_client.publish(topic, json_payload.into()).await;
-
-            match result {
-                Ok(_) => tracing::info!("published for user: {} => {:?}", user, observation),
-                Err(e) => tracing::error!("publish failed for {}: {:?}", user, e),
+        for user in &users {
+            match timekpr.observe(user).await {
+                Ok(observation) => {
+                    if let Some(e) = failing.remove(user) {
+                        tracing::info!(user, "observing again after failing with {}", e.kind());
+                    }
+                    publish_observation(&nats, &host, user, &observation).await;
+                }
+                Err(e) => {
+                    match failing.get(user) {
+                        None => tracing::warn!(user, kind = e.kind(), "observation failed: {e}"),
+                        Some(_) => {
+                            tracing::debug!(user, kind = e.kind(), "observation still failing: {e}")
+                        }
+                    }
+                    failing.insert(user.clone(), e);
+                }
             }
         }
 
-        let result = nats_client.flush().await;
-        if let Err(e) = result {
-            tracing::warn!("flush failed: {:?}", e);
-        } else {
-            tracing::debug!("flush successful");
+        if let Err(e) = nats.flush().await {
+            tracing::warn!("flush failed: {e:?}");
         }
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::Value;
-
-    #[test]
-    fn test_serialization() {
-        let observation = TimeObservation {
-            left_day: 3600,
-            spent_balance: 0,
-            spent_month: 18000,
-            spent_week: 7200,
-            spent_day: 3600,
-        };
-
-        let json_str = serde_json::to_string(&observation).expect("failed to serialize");
-        let json_value: Value = serde_json::from_str(&json_str).expect("failed to deserialize");
-
-        // Verify that keys are lowercase and values match
-        assert_eq!(json_value["left_day"], 3600);
-        assert_eq!(json_value["spent_balance"], 0);
-        assert_eq!(json_value["spent_month"], 18000);
-        assert_eq!(json_value["spent_week"], 7200);
-        assert_eq!(json_value["spent_day"], 3600);
+async fn publish_observation(
+    nats: &async_nats::Client,
+    host: &str,
+    user: &str,
+    observation: &observation::Observation,
+) {
+    let payload = serde_json::to_vec(observation).expect("an observation always serializes");
+    match nats
+        .publish(format!("time.obs.{host}.{user}"), payload.into())
+        .await
+    {
+        Ok(()) => tracing::info!(user, ?observation, "published observation"),
+        Err(e) => tracing::error!(user, "publishing observation failed: {e:?}"),
     }
+}
+
+/// Serves time adjustments on `time.adjust.<host>.*`, one request at a time in arrival
+/// order. Returns only when the subscription ends, which is fatal.
+async fn serve_adjustments(
+    nats: async_nats::Client,
+    timekpr: ZbusTimekpr,
+    host: String,
+    users: Vec<String>,
+) -> Result<()> {
+    let subject = format!("time.adjust.{host}.*");
+    let mut requests = nats
+        .subscribe(subject.clone())
+        .await
+        .with_context(|| format!("subscribing to {subject}"))?;
+    tracing::info!("serving time adjustments on {subject}");
+
+    while let Some(message) = requests.next().await {
+        let Some(user) = message.subject.rsplit('.').next() else {
+            continue;
+        };
+        // Read leniently, so even an invalid request is logged with its id when it has one.
+        let request_id = serde_json::from_slice::<serde_json::Value>(&message.payload)
+            .ok()
+            .and_then(|v| v.get("request_id")?.as_str().map(str::to_owned));
+        let (reply, event) = adjust::handle(
+            &users,
+            &timekpr,
+            &host,
+            user,
+            &message.payload,
+            jiff::Timestamp::now(),
+        )
+        .await;
+
+        match (&reply, &event) {
+            (Reply::Ok { .. }, Some(event)) => tracing::info!(?event, "time adjusted"),
+            (Reply::Error { code, message }, _) => {
+                tracing::warn!(
+                    user,
+                    ?request_id,
+                    ?code,
+                    "time adjustment failed: {message}"
+                )
+            }
+            _ => {}
+        }
+
+        // Reply first, then the observation, then the event; a failed publish is only logged.
+        match &message.reply {
+            Some(reply_to) => {
+                let payload = serde_json::to_vec(&reply).expect("a reply always serializes");
+                if let Err(e) = nats.publish(reply_to.clone(), payload.into()).await {
+                    tracing::error!(user, "publishing reply failed: {e:?}");
+                }
+            }
+            None => tracing::warn!(user, "time adjustment request had no reply subject"),
+        }
+        if let Reply::Ok { observation, .. } = &reply {
+            publish_observation(&nats, &host, user, observation).await;
+        }
+        if let Some(event) = &event {
+            let payload = serde_json::to_vec(event).expect("an event always serializes");
+            if let Err(e) = nats
+                .publish(format!("time.adjusted.{host}.{user}"), payload.into())
+                .await
+            {
+                tracing::error!(user, "publishing time.adjusted failed: {e:?}");
+            }
+        }
+        if let Err(e) = nats.flush().await {
+            tracing::warn!("flush failed: {e:?}");
+        }
+    }
+
+    bail!("the {subject} subscription ended")
 }

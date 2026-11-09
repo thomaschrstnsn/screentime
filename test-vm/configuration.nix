@@ -108,7 +108,8 @@ in
     ];
     environment.RUST_LOG = "info";
     serviceConfig = {
-      ExecStart = "${screentime-collector}/bin/screentime-collector -n nats://localhost:4222 -u ${monitoredUser} --hostname test-vm";
+      # ghost has no account and Timekpr has never seen it: it must not stop junior being reported.
+      ExecStart = "${screentime-collector}/bin/screentime-collector -n nats://localhost:4222 -u ${monitoredUser},ghost --hostname test-vm";
       User = "stcol";
       Group = "stcol";
       Restart = "on-failure";
