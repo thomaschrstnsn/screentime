@@ -25,7 +25,7 @@ A real-time web dashboard for monitoring screen time usage across multiple users
 You can run the application using `cargo`:
 
 ```bash
-cargo run --release
+cargo run -p screentime-web --release
 ```
 
 By default, the server listens on `127.0.0.1:3000`.
@@ -33,7 +33,7 @@ By default, the server listens on `127.0.0.1:3000`.
 ### Command Line Options
 
 ```bash
-cargo run -- --help
+cargo run -p screentime-web -- --help
 ```
 
 - `-b, --bind <BIND>`: Address to bind the server to (default: "127.0.0.1:3000")
@@ -58,7 +58,7 @@ A request with a valid JWT is an **adjuster**: the Cloudflare Access policy is t
 
 ### Local development
 
-Debug builds accept `--dev-identity <email>` (env `DEV_IDENTITY`), which attaches that identity to every request so you can act as an adjuster without Cloudflare, e.g. `cargo run -- --dev-identity me@example.com`. Release builds don't have the flag, and the web refuses to start when it is combined with `CF_ACCESS_TEAM`/`CF_ACCESS_AUD`.
+Debug builds accept `--dev-identity <email>` (env `DEV_IDENTITY`), which attaches that identity to every request so you can act as an adjuster without Cloudflare, e.g. `cargo run -p screentime-web -- --dev-identity me@example.com`. Release builds don't have the flag, and the web refuses to start when it is combined with `CF_ACCESS_TEAM`/`CF_ACCESS_AUD`.
 
 ## Data Format
 
@@ -83,7 +83,6 @@ Values are in seconds.
 - `/api/screentime` - REST API to fetch current screen time data
 - `/api/me` - The viewer's identity: `{"email": "...", "adjuster": true}`, or `{"email": null, "adjuster": false}` when anonymous
 - `POST /api/time-adjustments` - Time adjustment by an adjuster: `{"host", "user", "delta_seconds"}` (non-zero, within ±28800). Sent to the collector as a NATS request on `time.adjust.<host>.<user>`, waiting up to 15 s. Answers 200 with the collector's reply (`status: ok` / `error`), `unreachable` (no collector listening, no change made) or `timeout` (the change may or may not have happened), always with the `request_id` web made. Refusals are text: 401 without a verified identity, 400 for a bad body, 404 for a `host:user` web has no observations for, 415 unless the body is `application/json`
-- `/static/` - Static file serving
 
 ## License
 
