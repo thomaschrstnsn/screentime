@@ -1,0 +1,17 @@
+[package]
+name = "screentime-collector"
+version = "0.2.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1"
+async-nats = "0.46"
+zbus = "5"
+futures-util = "0.3"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1", features = ["full"] }
+clap = { version = "4.5.57", features = ["derive"] }
+tracing = "0.1.44"
+tracing-subscriber = "0.3.22"
+jiff = { version = "0.2.41", features = ["serde"] }

@@ -10,7 +10,7 @@
 
       screentime-collector = pkgs.rustPlatform.buildRustPackage {
         pname = "screentime-collector";
-        version = (lib.importTOML ./Cargo.toml).package.version;
+        version = (lib.importTOML ./src/collector/Cargo.toml).package.version;
         src = lib.fileset.toSource {
           root = ./.;
           fileset = lib.fileset.unions [
@@ -20,6 +20,8 @@
           ];
         };
         cargoLock.lockFile = ./Cargo.lock;
+        cargoBuildFlags = [ "-p" "screentime-collector" ];
+        cargoTestFlags = [ "-p" "screentime-collector" ];
         meta.mainProgram = "screentime-collector";
       };
     in
