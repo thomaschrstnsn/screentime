@@ -16,7 +16,7 @@ test-vm/stop
 | | |
 |---|---|
 | Monitored user | `junior`, with a fake wayland session so timekpr counts their time from boot |
-| Collector | From this flake's `nixosModules.default` with production's hardening, monitoring `junior` and running as `stcol` (in group `timekpr`), publishing to `time.obs.test-vm.junior` every 5 s and serving time adjustments on `time.adjust.test-vm.*`. |
+| Collector | From this flake's `nixosModules.collector` with production's hardening, monitoring `junior` and running as `stcol` (in group `timekpr`), publishing to `time.obs.test-vm.junior` every 5 s and serving time adjustments on `time.adjust.test-vm.*`. |
 | NATS | JetStream enabled, no auth, guest port 4222 forwarded to **`nats://127.0.0.1:14222`**. The collector creates the `OBSERVATIONS` and `ADJUSTMENTS` streams at startup. |
 | SSH | root, guest port 22 forwarded to **`127.0.0.1:12222`**, key login only |
 | Clock | UTC, with NTP off so clock changes stick |

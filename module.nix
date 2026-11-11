@@ -1,4 +1,5 @@
-# NixOS module for the collector, exported by the flake as nixosModules.default.
+# NixOS module for the collector, exported by the flake as nixosModules.collector
+# (and nixosModules.default).
 # The flake passes in its own packages; `package` defaults to the one for the
 # host system.
 packages:
@@ -18,8 +19,8 @@ in
 
     package = lib.mkOption {
       type = lib.types.package;
-      default = packages.${pkgs.stdenv.hostPlatform.system}.default;
-      defaultText = lib.literalExpression "screentime-collector.packages.\${system}.default";
+      default = packages.${pkgs.stdenv.hostPlatform.system}.screentime-collector;
+      defaultText = lib.literalExpression "screentime.packages.\${system}.screentime-collector";
       description = "The screentime-collector package to run.";
     };
 
