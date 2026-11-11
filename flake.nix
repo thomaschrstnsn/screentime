@@ -47,7 +47,7 @@
         test-vm = self.nixosConfigurations.test-vm.config.system.build.vm;
       };
 
-      nixosModules.collector = import ./module.nix self.packages;
+      nixosModules.collector = import ./collector-module.nix self.packages;
       # Kept so existing `nixosModules.default` imports keep working.
       nixosModules.default = self.nixosModules.collector;
       nixosModules.web = import ./web-module.nix self.packages;

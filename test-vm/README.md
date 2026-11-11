@@ -23,7 +23,7 @@ test-vm/stop
 | SSH | root, guest port 22 forwarded to **`127.0.0.1:12222`**, key login only |
 | Clock | UTC, with NTP off so clock changes stick |
 
-The NixOS config is [`configuration.nix`](configuration.nix), wired into the repo's `flake.nix` as `nixosConfigurations.test-vm` and `packages.test-vm`. It enables the collector and web through the same NixOS modules ([`../module.nix`](../module.nix), [`../web-module.nix`](../web-module.nix)) that production imports, adding only an ordering after NATS (and, for the collector, the fake session).
+The NixOS config is [`configuration.nix`](configuration.nix), wired into the repo's `flake.nix` as `nixosConfigurations.test-vm` and `packages.test-vm`. It enables the collector and web through the same NixOS modules ([`../collector-module.nix`](../collector-module.nix), [`../web-module.nix`](../web-module.nix)) that production imports, adding only an ordering after NATS (and, for the collector, the fake session).
 
 ## Scripts
 
