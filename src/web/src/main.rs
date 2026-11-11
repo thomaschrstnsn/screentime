@@ -13,13 +13,12 @@ use axum::{
     },
     middleware,
     response::{Html, Response},
-    routing::{get, get_service},
+    routing::get,
 };
 use clap::Parser;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{RwLock, broadcast};
-use tower_http::services::ServeDir;
 
 mod adjust;
 mod auth;
@@ -121,8 +120,7 @@ async fn main() -> Result<()> {
         .route("/", get(index))
         .route("/ws", get(websocket_handler))
         .route("/api/screentime", get(get_screentime_data))
-        .route("/api/me", get(me))
-        .nest_service("/static", get_service(ServeDir::new("static")));
+        .route("/api/me", get(me));
     let adjust_state = adjust::AdjustState {
         observations: app_state.screen_time_data.clone(),
         send_request: adjust::nats_sender(nats_client),
