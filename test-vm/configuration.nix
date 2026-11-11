@@ -1,6 +1,6 @@
 # NixOS test VM: Timekpr-nExT tracking a monitored user, NATS with JetStream,
-# and the collector from this flake's NixOS module, built from this working
-# tree. See ./README.md.
+# and the collector and web from this flake's NixOS modules, built from this
+# working tree. See ./README.md.
 { pkgs, ... }:
 let
   monitoredUser = "junior";
@@ -26,6 +26,12 @@ in
         host.address = "127.0.0.1";
         host.port = 12222;
         guest.port = 22;
+      }
+      {
+        from = "host";
+        host.address = "127.0.0.1";
+        host.port = 16767;
+        guest.port = 6767;
       }
     ];
   };
@@ -99,4 +105,14 @@ in
     "nats.service"
     "monitored-session.service"
   ];
+
+  # Without Cloudflare Access every viewer is anonymous: it shows observations
+  # but can't make time adjustments.
+  services.screentime-web = {
+    enable = true;
+    natsUrl = "nats://localhost:4222";
+    listenAddress = "0.0.0.0";
+    openFirewall = true;
+  };
+  systemd.services.screentime-web.after = [ "nats.service" ];
 }

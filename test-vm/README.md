@@ -1,6 +1,6 @@
 # Test VM
 
-A headless NixOS VM for manual integration tests. Timekpr-nExT tracks a monitored user, the collector built from this working tree reports on them, and NATS runs with JetStream. It is a small copy of the production setup on *cyrus*, and you control both the clock and the monitored user's time left today.
+A headless NixOS VM for manual integration tests. Timekpr-nExT tracks a monitored user, the collector built from this working tree reports on them, NATS runs with JetStream, and web shows the observations. It is a small copy of the production setup on *cyrus*, and you control both the clock and the monitored user's time left today.
 
 Requires Linux on x86_64 with KVM and Nix with flakes enabled. Nothing has to be installed beyond that.
 
@@ -8,6 +8,7 @@ Requires Linux on x86_64 with KVM and Nix with flakes enabled. Nothing has to be
 test-vm/start            # build from the working tree and boot (~10 s after the first build)
 test-vm/timekpr          # what timekpr thinks of junior right now
 test-vm/nats sub 'time.>'  # watch observations arrive on the host
+xdg-open http://127.0.0.1:16767  # the dashboard
 test-vm/stop
 ```
 
@@ -17,11 +18,12 @@ test-vm/stop
 |---|---|
 | Monitored user | `junior`, with a fake wayland session so timekpr counts their time from boot |
 | Collector | From this flake's `nixosModules.collector` with production's hardening, monitoring `junior` and running as `stcol` (in group `timekpr`), publishing to `time.obs.test-vm.junior` every 5 s and serving time adjustments on `time.adjust.test-vm.*`. |
+| Web | From this flake's `nixosModules.web`, running as `stweb`, guest port 6767 forwarded to **`http://127.0.0.1:16767`**. No Cloudflare Access, so it shows observations but can't make time adjustments. |
 | NATS | JetStream enabled, no auth, guest port 4222 forwarded to **`nats://127.0.0.1:14222`**. The collector creates the `OBSERVATIONS` and `ADJUSTMENTS` streams at startup. |
 | SSH | root, guest port 22 forwarded to **`127.0.0.1:12222`**, key login only |
 | Clock | UTC, with NTP off so clock changes stick |
 
-The NixOS config is [`configuration.nix`](configuration.nix), wired into the repo's `flake.nix` as `nixosConfigurations.test-vm` and `packages.test-vm`. It enables the collector through the same NixOS module ([`../module.nix`](../module.nix)) that production imports, adding only an ordering after NATS and the fake session.
+The NixOS config is [`configuration.nix`](configuration.nix), wired into the repo's `flake.nix` as `nixosConfigurations.test-vm` and `packages.test-vm`. It enables the collector and web through the same NixOS modules ([`../module.nix`](../module.nix), [`../web-module.nix`](../web-module.nix)) that production imports, adding only an ordering after NATS (and, for the collector, the fake session).
 
 ## Scripts
 
@@ -31,14 +33,14 @@ All scripts work from any directory.
 
 | Script | Does |
 |---|---|
-| `start [--foreground]` | Builds the VM, collector included, from the working tree, then boots it in the background and waits for SSH. `--foreground` attaches the serial console to your terminal instead (root is auto-logged in; quit with `Ctrl-a x`). |
+| `start [--foreground]` | Builds the VM, collector and web included, from the working tree, then boots it in the background and waits for SSH. `--foreground` attaches the serial console to your terminal instead (root is auto-logged in; quit with `Ctrl-a x`). |
 | `stop` | Shuts down cleanly over SSH, and kills QEMU if that hasn't finished after 30 s. The disk is kept. |
 | `delete` | Stops the VM and removes `.state/` (disk, SSH key, logs). The next `start` boots a fresh VM. |
 | `status` | Running or not, the state of the relevant services, and the guest clock. |
 | `ssh [command…]` | A root shell, or runs one command, e.g. `test-vm/ssh journalctl -fu screentime-collector`. |
 | `nats <args…>` | The NATS CLI on the host, pointed at the VM, e.g. `test-vm/nats sub 'time.>'` or `test-vm/nats req …`. |
 
-**Trying a code change:** the VM runs whatever collector was in the working tree at `start`. Run `test-vm/stop && test-vm/start` to pick up changes. The disk survives, so timekpr's limits and time spent carry over.
+**Trying a code change:** the VM runs whatever collector and web were in the working tree at `start`. Run `test-vm/stop && test-vm/start` to pick up changes. The disk survives, so timekpr's limits and time spent carry over.
 
 **The disk persists** across `stop`/`start` in `test-vm/.state/disk.qcow2` (gitignored), so timekpr state is kept. `delete` starts over.
 
@@ -90,11 +92,11 @@ sleep 25; test-vm/timekpr      # a new day with the full limit
 
 **A logged-out monitored user:** `test-vm/ssh systemctl stop monitored-session` ends junior's session, and `test-vm/ssh systemctl start monitored-session` brings it back. Timekpr stops counting time. Logind keeps junior's user manager running for a while (`loginctl list-sessions` shows a `manager` session), and as long as it does, timekpr holds junior in memory and handles day changes itself. Once `loginctl list-users` no longer shows junior, follow with `test-vm/ssh systemctl restart timekpr` to reach the fully logged-out case. There, timekpr answers DBus calls from its saved files, and a `setTimeLeft` on a new day is wiped by the next refresh unless `getUserInformation` ran first (every `timekpr` command does).
 
-**Point screentime-web at the VM:** use `nats://127.0.0.1:14222`.
+**Point a local screentime-web at the VM:** use `nats://127.0.0.1:14222`, e.g. to act as an adjuster with a debug build's `--dev-identity`, which the VM's web doesn't have.
 
 ## Troubleshooting
 
-- **`start` says the VM exited during boot:** read `test-vm/.state/console.log`. The usual causes are a missing `/dev/kvm` or ports 12222/14222 already in use on the host.
+- **`start` says the VM exited during boot:** read `test-vm/.state/console.log`. The usual causes are a missing `/dev/kvm` or ports 12222/14222/16767 already in use on the host.
 - **The collector restarts a few times right after the first boot.** That's expected: it fails until timekpr has seen junior's session once. `Restart=on-failure` takes care of it.
 - **The collector crashes for every user** when it's asked to report on a user timekpr has never seen: timekpr answers with an empty result, and the collector panics while parsing it.
 - **The collector unit isn't ordered after `timekpr.service`** on purpose. nixpkgs orders timekpr after `multi-user.target`, so that ordering would create a cycle and systemd would drop the collector at boot.

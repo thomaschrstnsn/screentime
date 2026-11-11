@@ -60,6 +60,30 @@ A request with a valid JWT is an **adjuster**: the Cloudflare Access policy is t
 
 Debug builds accept `--dev-identity <email>` (env `DEV_IDENTITY`), which attaches that identity to every request so you can act as an adjuster without Cloudflare, e.g. `cargo run -p screentime-web -- --dev-identity me@example.com`. Release builds don't have the flag, and the web refuses to start when it is combined with `CF_ACCESS_TEAM`/`CF_ACCESS_AUD`.
 
+### NixOS
+
+The repo flake exports `nixosModules.web`, which runs web as a hardened systemd service under its own `stweb` user:
+
+```nix
+{
+  imports = [ screentime.nixosModules.web ];
+  services.screentime-web = {
+    enable = true;
+    natsUrl = "nats://nats.example.com:4222";
+    listenAddress = "0.0.0.0"; # default 127.0.0.1
+    # port = 6767;
+    openFirewall = true;
+    cloudflareAccess = {
+      # null by default: every request is an anonymous viewer
+      team = "my-team";
+      aud = "<application audience tag>";
+    };
+  };
+}
+```
+
+`checks.x86_64-linux.web-module` is a NixOS VM test of the module, run by `nix flake check` (or on its own with `nix build .#checks.x86_64-linux.web-module`).
+
 ## Data Format
 
 The application reads the `OBSERVATIONS` JetStream stream (created by the collector; the web waits for it, retrying every 5 s) and expects messages on the subject `time.obs.<host>.<user>` with a JSON payload containing:

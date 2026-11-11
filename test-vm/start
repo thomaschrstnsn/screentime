@@ -15,7 +15,7 @@ is_running && die "the VM is already running (pid $(vm_pid))"
 mkdir -p "$STATE_DIR"
 [[ -f $KEY ]] || ssh-keygen -q -t ed25519 -N '' -C test-vm -f "$KEY"
 
-info "building the VM (collector from the working tree)"
+info "building the VM (collector and web from the working tree)"
 vm=$(nix build "$REPO_DIR#test-vm" --no-link --print-out-paths)
 
 # The run script reads NIX_DISK_IMAGE (created on first boot) and QEMU_OPTS.
@@ -37,4 +37,4 @@ until vm_ssh true 2>/dev/null; do
   ((SECONDS - started < 120)) || die "no SSH after 120s, see $CONSOLE_LOG"
   sleep 1
 done
-info "up after $((SECONDS - started))s: SSH on 127.0.0.1:$SSH_PORT, NATS on nats://127.0.0.1:$NATS_PORT"
+info "up after $((SECONDS - started))s: SSH on 127.0.0.1:$SSH_PORT, NATS on nats://127.0.0.1:$NATS_PORT, web on http://127.0.0.1:$WEB_PORT"

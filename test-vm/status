@@ -7,8 +7,8 @@ if ! pid=$(vm_pid); then
   echo "stopped$([[ -f $DISK ]] && echo ", disk kept at $DISK")"
   exit 0
 fi
-echo "running (pid $pid), SSH on 127.0.0.1:$SSH_PORT, NATS on nats://127.0.0.1:$NATS_PORT"
-vm_ssh 'for u in nats timekpr monitored-session screentime-collector; do
+echo "running (pid $pid), SSH on 127.0.0.1:$SSH_PORT, NATS on nats://127.0.0.1:$NATS_PORT, web on http://127.0.0.1:$WEB_PORT"
+vm_ssh 'for u in nats timekpr monitored-session screentime-collector screentime-web; do
   printf "  %-22s %s\n" "$u" "$(systemctl is-active $u)"
 done
 printf "  %-22s %s\n" "guest clock" "$(date -u "+%F %T UTC")"' ||

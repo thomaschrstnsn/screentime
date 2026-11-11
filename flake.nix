@@ -50,6 +50,9 @@
       nixosModules.collector = import ./module.nix self.packages;
       # Kept so existing `nixosModules.default` imports keep working.
       nixosModules.default = self.nixosModules.collector;
+      nixosModules.web = import ./web-module.nix self.packages;
+
+      checks.${system}.web-module = import ./checks/web-module.nix { inherit self pkgs; };
 
       # Manual integration test VM, driven by the scripts in ./test-vm.
       nixosConfigurations.test-vm = nixpkgs.lib.nixosSystem {
@@ -57,6 +60,7 @@
         modules = [
           "${nixpkgs}/nixos/modules/virtualisation/qemu-vm.nix"
           self.nixosModules.collector
+          self.nixosModules.web
           ./test-vm/configuration.nix
         ];
       };

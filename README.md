@@ -16,4 +16,4 @@ cargo test --workspace
 nix build .#screentime-collector .#screentime-web
 ```
 
-The flake also exports `nixosModules.collector` (also as `nixosModules.default`) and a manual integration test VM, `packages.test-vm`, driven by the scripts in [`test-vm/`](test-vm/README.md).
+The flake also exports `nixosModules.collector` (also as `nixosModules.default`), `nixosModules.web`, a NixOS VM test of the web module (`nix flake check`) and a manual integration test VM, `packages.test-vm`, driven by the scripts in [`test-vm/`](test-vm/README.md).
