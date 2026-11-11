@@ -4,8 +4,8 @@ use anyhow::{Context, Result, bail};
 use clap::Parser;
 use futures_util::StreamExt;
 
-use crate::adjust::contract::Reply;
 use crate::timekpr::{Timekpr, TimekprError, ZbusTimekpr};
+use screentime_contract::{Reply, subject};
 
 mod adjust;
 mod dbus;
@@ -49,7 +49,7 @@ async fn main() -> Result<()> {
         async_nats::jetstream::new(nats.clone()),
         vec![
             observation::observations_stream(),
-            adjust::contract::adjustments_stream(),
+            adjust::stream::adjustments_stream(),
         ],
     ));
     let observing = tokio::spawn(observe_loop(
@@ -116,7 +116,7 @@ async fn publish_observation(
 ) {
     let payload = serde_json::to_vec(observation).expect("an observation always serializes");
     match nats
-        .publish(format!("time.obs.{host}.{user}"), payload.into())
+        .publish(subject::observation(host, user), payload.into())
         .await
     {
         Ok(()) => tracing::info!(user, ?observation, "published observation"),
@@ -132,7 +132,7 @@ async fn serve_adjustments(
     host: String,
     users: Vec<String>,
 ) -> Result<()> {
-    let subject = format!("time.adjust.{host}.*");
+    let subject = subject::adjust(&host, "*");
     let mut requests = nats
         .subscribe(subject.clone())
         .await
@@ -186,7 +186,7 @@ async fn serve_adjustments(
         if let Some(event) = &event {
             let payload = serde_json::to_vec(event).expect("an event always serializes");
             if let Err(e) = nats
-                .publish(format!("time.adjusted.{host}.{user}"), payload.into())
+                .publish(subject::adjusted(&host, user), payload.into())
                 .await
             {
                 tracing::error!(user, "publishing time.adjusted failed: {e:?}");

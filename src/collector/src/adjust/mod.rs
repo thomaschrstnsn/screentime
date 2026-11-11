@@ -1,15 +1,13 @@
 //! Time adjustments served on `time.adjust.<host>.<user>`.
 //!
-//! The contract with screentime-web lives in [`contract`]; [`handle`] turns one request
+//! The contract with web lives in `screentime-contract`; [`handle`] turns one request
 //! into a reply and, on success, a `time.adjusted` event.
 
-pub mod contract;
+pub mod stream;
 
-use self::contract::{AdjustedEvent, ErrorCode, Reply, Request};
+use screentime_contract::{AdjustedEvent, ErrorCode, MAX_DELTA_SECONDS, Reply, Request};
+
 use crate::timekpr::{Timekpr, TimekprError};
-
-/// The largest time adjustment, either way, in one request: 8 h.
-pub const MAX_DELTA_SECONDS: i32 = 8 * 60 * 60;
 
 /// Handles one time adjustment request for `user`, the last token of the subject.
 pub async fn handle(

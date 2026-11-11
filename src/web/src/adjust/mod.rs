@@ -1,7 +1,5 @@
 //! Time adjustments: `POST /api/time-adjustments`, sent to the collector as a NATS request.
 
-mod contract;
-
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -15,14 +13,15 @@ use axum::{
     routing::post,
 };
 use futures::future::BoxFuture;
+use screentime_contract::{self as contract, subject};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 use crate::Observations;
 use crate::auth::CloudflareIdentity;
 
-/// Largest time adjustment either way (8 h); the collector enforces the same bound.
-const MAX_DELTA_SECONDS: i64 = 8 * 60 * 60;
+/// Largest time adjustment either way; the collector enforces the same bound.
+const MAX_DELTA_SECONDS: i64 = contract::MAX_DELTA_SECONDS as i64;
 
 /// How a NATS request to the collector ended.
 #[derive(Debug, Clone)]
@@ -154,7 +153,7 @@ async fn adjust_time(
         key,
         request.delta_seconds
     );
-    let subject = format!("time.adjust.{}.{}", body.host, body.user);
+    let subject = subject::adjust(&body.host, &body.user);
     let payload = serde_json::to_vec(&request).expect("request serializes");
 
     let mut answer = match (state.send_request)(subject, payload.into()).await {
@@ -183,7 +182,7 @@ mod tests {
     use tokio::sync::RwLock;
     use tower::ServiceExt;
 
-    const REPLY_OK: &str = include_str!("examples/reply_ok.json");
+    use screentime_contract::examples::REPLY_OK;
 
     /// Every NATS request a fake sender was asked to send, as (subject, payload).
     type Sent = Arc<Mutex<Vec<(String, Bytes)>>>;

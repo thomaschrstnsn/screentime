@@ -14,4 +14,4 @@ Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/ag
 
 ## Layout
 
-A Cargo workspace with one crate per component: `src/collector` (`screentime-collector`) and `src/web` (`screentime-web`). The flake, `module.nix`, `test-vm/` and docs live at the root. Run `cargo test --workspace`, and `nix build .#screentime-collector .#screentime-web` when changing the build.
+A Cargo workspace with one crate per component: `src/collector` (`screentime-collector`) and `src/web` (`screentime-web`), plus `src/contract` (`screentime-contract`), the NATS subjects, stream names, message types and JSON examples both depend on. The flake, `module.nix`, `test-vm/` and docs live at the root. Run `cargo test --workspace`, and `nix build .#screentime-collector .#screentime-web` when changing the build.

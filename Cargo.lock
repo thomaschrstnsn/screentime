@@ -2107,12 +2107,22 @@ dependencies = [
  "clap",
  "futures-util",
  "jiff",
+ "screentime-contract",
  "serde",
  "serde_json",
  "tokio",
  "tracing",
  "tracing-subscriber",
  "zbus",
+]
+
+[[package]]
+name = "screentime-contract"
+version = "0.3.0"
+dependencies = [
+ "jiff",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -2127,6 +2137,7 @@ dependencies = [
  "futures",
  "jsonwebtoken",
  "reqwest",
+ "screentime-contract",
  "serde",
  "serde_json",
  "tokio",

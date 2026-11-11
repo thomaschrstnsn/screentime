@@ -17,6 +17,7 @@ use axum::{
 };
 use clap::Parser;
 use futures::StreamExt;
+use screentime_contract::OBSERVATIONS_STREAM;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{RwLock, broadcast};
 
@@ -39,8 +40,6 @@ struct Config {
     dev_identity: Option<String>,
 }
 
-/// JetStream stream holding observations; created and owned by the collector.
-const OBSERVATIONS_STREAM: &str = "OBSERVATIONS";
 /// Subject filter for observations, published as `time.obs.<host>.<user>`.
 const OBSERVATIONS_SUBJECT: &str = "time.obs.>";
 /// How long to wait between attempts to find the observations stream.
